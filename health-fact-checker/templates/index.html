@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Health Fact-Checker</title>
+  <style>
+    :root { --bg: #0f172a; --card: #1e293b; --accent: #14b8a6; --text: #e2e8f0; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 24px;
+    }
+    .wrap { width: 100%; max-width: 760px; }
+    h1 { font-size: 1.6rem; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: .9rem; margin-bottom: 20px; }
+    .row { display: flex; gap: 10px; }
+    input[type=text] {
+      flex: 1; padding: 14px 16px; border-radius: 10px; border: 1px solid #334155;
+      background: var(--card); color: var(--text); font-size: 1rem;
+    }
+    input[type=text]:focus { outline: none; border-color: var(--accent); }
+    button {
+      padding: 14px 22px; border: none; border-radius: 10px; background: var(--accent);
+      color: #04211d; font-weight: 700; font-size: 1rem; cursor: pointer;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .response {
+      margin-top: 20px; background: var(--card); border: 1px solid #334155; border-radius: 12px;
+      padding: 20px; min-height: 240px; line-height: 1.55; font-size: 1rem;
+    }
+    .placeholder { color: var(--muted); }
+    .error { color: #f87171; }
+    .badge {
+      display: inline-block; padding: 8px 18px; border-radius: 999px; font-weight: 800;
+      font-size: 1.1rem; letter-spacing: .5px; margin-bottom: 16px;
+    }
+    .badge.TRUE { background: #052e2b; color: #34d399; border: 1px solid #34d399; }
+    .badge.FALSE { background: #3b0a0a; color: #f87171; border: 1px solid #f87171; }
+    .badge.UNVERIFIED { background: #3a2c05; color: #fbbf24; border: 1px solid #fbbf24; }
+    .field { margin-top: 12px; }
+    .label { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 4px; }
+    .value { font-size: 1rem; }
+    .examples { margin-top: 10px; color: var(--muted); font-size: .82rem; }
+    .examples a { color: var(--accent); cursor: pointer; text-decoration: none; }
+    .examples a:hover { text-decoration: underline; }
+    .disclaimer { margin-top: 14px; color: var(--muted); font-size: .8rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🔎 Health Fact-Checker</h1>
+    <div class="sub">Type a health claim → get <b>TRUE</b>, <b>FALSE</b> or <b>UNVERIFIED</b> with a reason and a reliable source · powered by Ollama ({{ model }})</div>
+
+    <div class="row">
+      <input id="question" type="text" placeholder="e.g. Lemon juice cures COVID" autocomplete="off" />
+      <button id="send">Check</button>
+    </div>
+    <div class="examples">
+      Try:
+      <a data-claim="Lemon juice cures COVID">Lemon juice cures COVID</a> ·
+      <a data-claim="Vaccines cause autism">Vaccines cause autism</a> ·
+      <a data-claim="Drinking water helps prevent dehydration">Water prevents dehydration</a>
+    </div>
+
+    <div id="response" class="response"><span class="placeholder">The verdict will appear here…</span></div>
+
+    <div class="disclaimer">
+      ⚠️ General information only — not a substitute for professional medical advice.
+      For emergencies, contact your local emergency services.
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById("question");
+    const button = document.getElementById("send");
+    const responseBox = document.getElementById("response");
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    async function ask() {
+      const question = input.value.trim();
+      if (!question) { input.focus(); return; }
+
+      button.disabled = true;
+      responseBox.innerHTML = '<span class="placeholder">Checking…</span>';
+
+      try {
+        const res = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          responseBox.innerHTML = '<span class="error"></span>';
+          responseBox.firstChild.textContent = data.error || "Something went wrong.";
+        } else {
+          const verdict = data.verdict || "UNVERIFIED";
+          responseBox.innerHTML =
+            '<div class="badge ' + escapeHtml(verdict) + '">' + escapeHtml(verdict) + '</div>' +
+            '<div class="field"><div class="label">Claim</div><div class="value">' + escapeHtml(question) + '</div></div>' +
+            '<div class="field"><div class="label">Reason</div><div class="value">' + escapeHtml(data.reason || "") + '</div></div>' +
+            '<div class="field"><div class="label">Source</div><div class="value">' + escapeHtml(data.source || "N/A") + '</div></div>';
+        }
+      } catch (err) {
+        responseBox.innerHTML = '<span class="error"></span>';
+        responseBox.firstChild.textContent = "Network error: " + err.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    button.addEventListener("click", ask);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+    document.querySelectorAll(".examples a").forEach(a => {
+      a.addEventListener("click", () => { input.value = a.dataset.claim; ask(); });
+    });
+  </script>
+</body>
+</html>
